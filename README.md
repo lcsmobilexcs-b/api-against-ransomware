@@ -23,7 +23,7 @@ Serviço em Python que:
 ## Instalação
 
 ```bash
-cd securitysnares-beyondtrust-automation
+cd api-against-ransomware
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
