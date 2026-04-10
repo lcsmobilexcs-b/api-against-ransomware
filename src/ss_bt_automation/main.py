@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 import time
@@ -39,8 +40,31 @@ def configure_logging(level: str) -> None:
     )
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="SecuritySnares ransomware alerts -> BeyondTrust Password Safe rotation.",
+    )
+    parser.add_argument(
+        "--company-domain",
+        "-d",
+        dest="company_domain_override",
+        default=argparse.SUPPRESS,
+        metavar="DOMAIN",
+        help=(
+            "Company DNS domain for FQDN managed-account lookup (e.g. contoso.com). "
+            "Overrides COMPANY_DOMAIN from the environment when set."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parse_args(argv)
     settings = get_settings()
+    if hasattr(args, "company_domain_override"):
+        settings = settings.model_copy(
+            update={"company_domain": args.company_domain_override.strip()},
+        )
     configure_logging(settings.log_level)
     log = structlog.get_logger("main")
 
@@ -88,6 +112,7 @@ def main() -> None:
         "scheduler_started",
         poll_seconds=settings.securitysnares_poll_seconds,
         state_db=settings.state_db_path,
+        company_domain=settings.company_domain or None,
     )
 
     try:

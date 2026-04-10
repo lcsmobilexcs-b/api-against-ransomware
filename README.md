@@ -5,7 +5,7 @@ Serviço em Python que:
 1. Faz **polling** na API de **Alerts** do SecuritySnares (Bearer token).
 2. Filtra alertas de **ransomware** (severidade em `ai_analysis` e/ou palavra-chave).
 3. Extrai `hostname` e `executing_username`.
-4. Abre sessão no **BeyondTrust Password Safe** (`POST /Auth/SignAppIn`), localiza **Managed Account** e dispara **rotação** (`POST /managedaccounts/{id}/credentials/change`).
+4. Abre sessão no **BeyondTrust Password Safe** (`POST /Auth/SignAppIn`), tenta localizar **Managed Account** com **FQDN** (`hostname` + domínio da empresa, via `--company-domain` ou `COMPANY_DOMAIN`) e, se não achar, repete a busca pelo fluxo anterior (**hostname** + nome de conta). Em caso de match único, dispara **rotação** (`POST /managedaccounts/{id}/credentials/change`).
 5. Se não houver match (ou for ambíguo), envia **email** aos administradores.
 6. Persiste estado em **SQLite** para **idempotência** por `entity_id` do alerta.
 
@@ -16,7 +16,7 @@ Serviço em Python que:
 
 ## Requisitos
 
-- Python 3.11+
+- Python 3.11, 3.12, 3.13 ou 3.14
 - Conta técnica no BeyondTrust com permissões adequadas (ex.: **Password Safe Account Management** para rotação).
 - Managed accounts com **Enable for API Access** quando aplicável.
 
@@ -26,6 +26,7 @@ Serviço em Python que:
 cd securitysnares-beyondtrust-automation
 python -m venv .venv
 .venv\Scripts\activate
+python -m pip install --upgrade pip
 pip install -e .
 ```
 
@@ -37,9 +38,16 @@ Variáveis obrigatórias mínimas:
 
 - `SECURITYSNARES_API_KEY`
 - `BEYONDTRUST_BASE_URL`, `BEYONDTRUST_API_KEY`, `BEYONDTRUST_RUNAS`
+- Opcional: `COMPANY_DOMAIN` (FQDN na busca de conta gerenciada antes do hostname “cru”)
 - Para notificações: `SMTP_*`, `ADMIN_EMAIL_TO`
 
 ## Execução
+
+```bash
+python -m ss_bt_automation --company-domain contoso.com
+```
+
+O argumento `--company-domain` (ou `-d`) sobrescreve `COMPANY_DOMAIN` do ambiente para aquela execução. Sem domínio configurado, a busca segue apenas por hostname + conta como antes.
 
 ```bash
 python -m ss_bt_automation
@@ -48,7 +56,7 @@ python -m ss_bt_automation
 Ou:
 
 ```bash
-ss-bt-automation
+ss-bt-automation --company-domain contoso.com
 ```
 
 O serviço executa um ciclo imediatamente e depois a cada `SECURITYSNARES_POLL_SECONDS`.

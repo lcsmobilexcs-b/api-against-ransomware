@@ -68,7 +68,35 @@ def _system_matches_host(m: ManagedAccountMatch, hostname: str) -> bool:
     return False
 
 
-def _resolve_managed_account(
+def _fqdn_system_candidates(hostname: str, domain: str) -> list[str]:
+    """
+    Build systemName candidates as host.domain for BeyondTrust lookup.
+    Skips appending domain when the hostname already ends with that DNS suffix.
+    """
+    d = (domain or "").strip()
+    if not d:
+        return []
+    d_lower = d.lower()
+    suffix = "." + d_lower
+    out: list[str] = []
+    seen_lower: set[str] = set()
+    for h in _hostname_candidates(hostname):
+        hl = h.strip()
+        if not hl:
+            continue
+        hl_lower = hl.lower()
+        if hl_lower == d_lower or hl_lower.endswith(suffix):
+            candidate = hl
+        else:
+            candidate = f"{hl}.{d}"
+        key = candidate.lower()
+        if key not in seen_lower:
+            seen_lower.add(key)
+            out.append(candidate)
+    return out
+
+
+def _resolve_managed_account_hostname_fallback(
     bt: BeyondTrustClient,
     alert: NormalizedAlert,
 ) -> tuple[ManagedAccountMatch | None, str]:
@@ -109,13 +137,38 @@ def _resolve_managed_account(
     return None, "ambiguous"
 
 
+def _resolve_managed_account(
+    bt: BeyondTrustClient,
+    alert: NormalizedAlert,
+    settings: Settings,
+) -> tuple[ManagedAccountMatch | None, str]:
+    domain = (settings.company_domain or "").strip()
+    if domain:
+        for sys_name in _fqdn_system_candidates(alert.hostname, domain):
+            try:
+                m = bt.find_managed_account(sys_name, alert.account_name)
+            except Exception as e:
+                logger.warning(
+                    "managed_account_lookup_failed",
+                    correlation_id=alert.entity_id,
+                    phase="domain_fqdn",
+                    system=sys_name,
+                    error=str(e),
+                )
+                m = None
+            if m:
+                return m, "domain_fqdn"
+
+    return _resolve_managed_account_hostname_fallback(bt, alert)
+
+
 def _beyondtrust_actions(
     settings: Settings,
     alert: NormalizedAlert,
 ) -> BeyondTrustResult:
     """Lookup + rotate only (no email). Used inside circuit breaker."""
     with BeyondTrustClient(settings) as bt:
-        chosen, how = _resolve_managed_account(bt, alert)
+        chosen, how = _resolve_managed_account(bt, alert, settings)
 
         if how == "ambiguous":
             return BeyondTrustResult(

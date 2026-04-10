@@ -1,2 +1,0 @@
-[console_scripts]
-ss-bt-automation = ss_bt_automation.main:main

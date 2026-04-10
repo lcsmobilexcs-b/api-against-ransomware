@@ -50,6 +50,10 @@ class Settings(BaseSettings):
         description="Queue rotation if target unreachable",
     )
     credential_change_update_system: bool = Field(default=True)
+    company_domain: str = Field(
+        default="",
+        description="DNS suffix for FQDN managed-account lookup before hostname-only match",
+    )
 
     # Email (SMTP)
     smtp_host: str = Field(default="")
